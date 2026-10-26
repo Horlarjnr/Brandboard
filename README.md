@@ -28,7 +28,7 @@ Frontend
    v
 FastAPI
    |
-   +-- SQLModel / SQLite or PostgreSQL
+   +-- PostgreSQL
    +-- local storage or S3-compatible storage
    +-- generation runner
           |
@@ -43,7 +43,7 @@ The language model never owns the final image. It returns a small validated `Ban
 ## Requirements
 
 - Python 3.11 or newer
-- SQLite for local development
+- PostgreSQL installed locally or through Docker
 - An OpenRouter API key for live LLM generations
 - Node/Chromium only if optional server-side rendering is later enabled
 
@@ -70,7 +70,7 @@ The service should expose:
 Configuration belongs in environment variables rather than source code. The eventual `.env.example` should include:
 
 ```text
-DATABASE_URL=sqlite:///./brandboard.db
+DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/brandboard
 STORAGE_ROOT=./storage
 OPENROUTER_API_KEY=
 MODEL_BRIEF=
@@ -199,7 +199,7 @@ Run the smallest relevant test selection during development, then run the comple
 
 ## Deployment notes
 
-SQLite and local storage are for development and prototypes. Production should use PostgreSQL and an S3-compatible storage adapter when multiple instances or durable asset storage are required.
+PostgreSQL is used for both local development and production. Local file storage is suitable for development; production should use an S3-compatible storage adapter when multiple instances or durable asset storage are required.
 
 FastAPI background tasks are sufficient for the first slice. Move generation work to a durable queue such as arq or Celery with Redis when jobs need retries across process restarts or when generation volume increases.
 
