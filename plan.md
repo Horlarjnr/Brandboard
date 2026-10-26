@@ -14,7 +14,7 @@ The backend does **not** own the visual application shell or client-side PNG exp
 4. A generation is complete when sanitized SVG/HTML is available to the client.
 5. The backend stores the sanitized markup and structured spec so a banner can be re-rendered without another model call.
 6. Projects use a short public code for lookup and a separate owner token for authorization.
-7. SQLite is the development database; SQLModel and Alembic keep the schema portable to PostgreSQL.
+7. PostgreSQL is used for both local development and production; SQLModel and Alembic manage the shared schema.
 8. Generation requests are asynchronous and expose status through polling.
 9. A client-supplied `request_id` makes generation creation idempotent.
 10. Dimensions are selected from a bounded preset list rather than accepting arbitrary sizes.
