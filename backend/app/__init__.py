@@ -1,0 +1,1 @@
+"""BrandBoard backend application."""
