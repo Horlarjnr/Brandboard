@@ -49,9 +49,10 @@ The language model never owns the final image. It returns a small validated `Ban
 
 ## Local setup
 
-The repository is currently documentation-only. When the application skeleton is added, the expected setup will be:
+From the repository root, create and activate a virtual environment in `backend/`, then install the project:
 
 ```bash
+cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -70,7 +71,7 @@ The service should expose:
 Configuration belongs in environment variables rather than source code. The eventual `.env.example` should include:
 
 ```text
-DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/brandboard
+DATABASE_URL=postgresql+psycopg://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
 STORAGE_ROOT=./storage
 OPENROUTER_API_KEY=
 MODEL_BRIEF=
