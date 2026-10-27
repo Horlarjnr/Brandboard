@@ -74,7 +74,16 @@ The service should expose:
 Configuration belongs in environment variables rather than source code. The eventual `.env.example` should include:
 
 ```text
+# Option A: provide the complete SQLAlchemy URL.
 DATABASE_URL=postgresql+psycopg://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+
+# Option B: provide database components and let the backend build the URL.
+DB_HOST=db.[PROJECT-REF].supabase.co
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=
+DB_SSLMODE=require
 STORAGE_ROOT=./storage
 OPENROUTER_API_KEY=
 MODEL_BRIEF=
@@ -108,9 +117,11 @@ client because the backend stores only its hash.
 settings from `backend/.env`. [app/db.py](./backend/app/db.py) creates the
 SQLModel engine and provides a request-scoped database session.
 
-Set `DATABASE_URL` to the connection string from Supabase. Use the Supabase
-connection details appropriate for your environment; do not commit the password
-to Git.
+Set either `DATABASE_URL` or all of `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`,
+and `DB_PASSWORD`. `DB_SSLMODE` is optional and should normally be `require`
+for Supabase. When `DATABASE_URL` is present, it takes precedence over all
+component variables. The backend URL builder safely quotes special characters
+in the database username, password, and database name.
 
 ### 2. Database schema
 
@@ -178,8 +189,28 @@ source .venv/bin/activate
 cp .env.example .env
 ```
 
-Edit `backend/.env` and replace the placeholder `DATABASE_URL` with the
-Supabase PostgreSQL connection string. Then apply the schema:
+Edit `backend/.env` and choose one of the following database configurations.
+
+Complete URL:
+
+```text
+DATABASE_URL=postgresql+psycopg://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+```
+
+Or separate components:
+
+```text
+DATABASE_URL=
+DB_HOST=db.[PROJECT-REF].supabase.co
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=[PASSWORD]
+DB_SSLMODE=require
+```
+
+The complete URL takes precedence when both configurations are present. Then
+apply the schema:
 
 ```bash
 alembic upgrade head
