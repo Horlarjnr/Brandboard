@@ -53,8 +53,8 @@ From the repository root, create and activate a virtual environment in `backend/
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv # on windows use python -m venv .venv
+source .venv/bin/activate # on windows use 
 pip install -e ".[dev]"
 cp .env.example .env
 alembic upgrade head
