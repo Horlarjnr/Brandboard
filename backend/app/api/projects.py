@@ -7,7 +7,6 @@ from app.schemas import ProjectCreate, ProjectCreatedResponse, ProjectResponse, 
 from app.utils.ids import generate_owner_token, generate_project_code
 from app.utils.security import hash_token, token_matches
 
-
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 

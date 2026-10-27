@@ -43,7 +43,7 @@ The language model never owns the final image. It returns a small validated `Ban
 ## Requirements
 
 - Python 3.11 or newer
-- PostgreSQL installed locally or through Docker
+- A Supabase project with PostgreSQL enabled
 - An OpenRouter API key for live LLM generations
 - Node/Chromium only if optional server-side rendering is later enabled
 
@@ -53,13 +53,16 @@ From the repository root, create and activate a virtual environment in `backend/
 
 ```bash
 cd backend
-python3 -m venv .venv # on windows use python -m venv .venv
-source .venv/bin/activate # on windows use 
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+The commands above are instructions for you to run locally. The agent does not
+start the application or connect to Supabase.
 
 The service should expose:
 
@@ -81,6 +84,127 @@ DAILY_PROJECT_GENERATION_CAP=
 ```
 
 Model names, storage backends, and limits must be configurable without changing pipeline code.
+
+## What is implemented
+
+The initial backend slice currently includes:
+
+- FastAPI application setup with `/health`.
+- PostgreSQL SQLModel engine configuration for Supabase.
+- Alembic configuration and the initial `project` table migration.
+- Project creation with a one-time owner token.
+- SHA-256 token storage and constant-time token comparison.
+- Protected project read and update endpoints.
+- Ruff configuration and a health endpoint test.
+
+The project token is returned only by `POST /projects`. Store it in the frontend
+client because the backend stores only its hash.
+
+## Backend walkthrough
+
+### 1. Configuration and database
+
+[app/config.py](./backend/app/config.py) reads `DATABASE_URL` and the other
+settings from `backend/.env`. [app/db.py](./backend/app/db.py) creates the
+SQLModel engine and provides a request-scoped database session.
+
+Set `DATABASE_URL` to the connection string from Supabase. Use the Supabase
+connection details appropriate for your environment; do not commit the password
+to Git.
+
+### 2. Database schema
+
+[migrations/versions/0001_create_projects.py](./backend/migrations/versions/0001_create_projects.py)
+creates the first `project` table. Run the migration against your Supabase
+database before using the project endpoints.
+
+### 3. Project security
+
+[app/utils/ids.py](./backend/app/utils/ids.py) creates a public project code and
+a high-entropy owner token. [app/utils/security.py](./backend/app/utils/security.py)
+hashes the token before persistence and compares presented tokens with a
+constant-time comparison.
+
+The project code is an identifier, not a secret. Protected requests must send:
+
+```text
+X-Project-Token: <project-owner-token>
+```
+
+### 4. Project API
+
+[app/api/projects.py](./backend/app/api/projects.py) provides:
+
+```text
+POST  /projects
+GET   /projects/{code}
+PATCH /projects/{code}
+```
+
+The current create endpoint accepts JSON. Logo multipart handling will be added
+with the asset-storage slice.
+
+Example create request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "TechNest",
+    "description": "A student technology club focused on learning and collaboration.",
+    "colors": {
+      "primary": "#6366F1",
+      "accent": "#10B981",
+      "tertiary": "#A78BFA"
+    },
+    "font": "Inter"
+  }'
+```
+
+Copy the `code` and `owner_token` from the response. Then retrieve the project:
+
+```bash
+curl http://127.0.0.1:8000/projects/<PROJECT_CODE> \
+  -H "X-Project-Token: <PROJECT_OWNER_TOKEN>"
+```
+
+## Your manual run steps
+
+Run these commands from the repository root:
+
+```bash
+cd backend
+source .venv/bin/activate
+cp .env.example .env
+```
+
+Edit `backend/.env` and replace the placeholder `DATABASE_URL` with the
+Supabase PostgreSQL connection string. Then apply the schema:
+
+```bash
+alembic upgrade head
+```
+
+Start the development server yourself:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Open `http://127.0.0.1:8000/docs` to use the interactive API documentation, or
+check the health endpoint:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Expected response:
+
+```json
+{"status": "ok"}
+```
+
+Stop the server with `Ctrl+C`.
 
 ## API overview
 
