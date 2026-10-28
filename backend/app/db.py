@@ -1,45 +1,14 @@
-import os
 from collections.abc import Generator
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 
-# Load environment variables from .env.
-load_dotenv()
+from app.config import get_settings
 
-# Fetch the Supabase connection variables.
-USER = os.getenv("user")
-PASSWORD = os.getenv("password")
-HOST = os.getenv("host")
-PORT = os.getenv("port")
-DBNAME = os.getenv("dbname")
+settings = get_settings()
+DATABASE_URL = settings.database_url
 
-missing = [
-    name
-    for name, value in {
-        "user": USER,
-        "password": PASSWORD,
-        "host": HOST,
-        "port": PORT,
-        "dbname": DBNAME,
-    }.items()
-    if not value
-]
-if missing:
-    raise RuntimeError(
-        "Missing database environment variables: "
-        + ", ".join(missing)
-        + ". Set them in backend/.env."
-    )
-
-# Construct the SQLAlchemy connection string.
-DATABASE_URL = (
-    f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}?sslmode=require"
-)
-
-# Create the SQLAlchemy engine.
 engine = create_engine(DATABASE_URL)
 
 
