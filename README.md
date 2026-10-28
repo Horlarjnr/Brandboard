@@ -96,10 +96,13 @@ The initial backend slice currently includes:
 
 - FastAPI application setup with `/health`.
 - PostgreSQL SQLModel engine configuration for Supabase.
-- Alembic configuration and the initial `project` table migration.
+- Alembic configuration and PostgreSQL migrations for projects and generations.
 - Project creation with a one-time owner token.
 - SHA-256 token storage and constant-time token comparison.
 - Protected project read and update endpoints.
+- Asynchronous generation lifecycle with brief, compose, and sanitize steps.
+- Idempotent generation creation, status polling, regeneration, and SVG download.
+- Safe deterministic SVG composition and allowlist-based SVG sanitization.
 - Ruff configuration and a health endpoint test.
 
 The project token is returned only by `POST /projects`. Store it in the frontend
@@ -172,6 +175,39 @@ Copy the `code` and `owner_token` from the response. Then retrieve the project:
 curl http://127.0.0.1:8000/projects/<PROJECT_CODE> \
   -H "X-Project-Token: <PROJECT_OWNER_TOKEN>"
 ```
+
+### 5. Generation API
+
+[app/api/generations.py](./backend/app/api/generations.py) provides:
+
+```text
+POST /projects/{code}/generations
+GET  /generations/{id}
+POST /generations/{id}/regenerate
+GET  /generations/{id}/download
+```
+
+Generation creation returns `202 Accepted` with `queued` status. The backend
+then runs the brief model, composes deterministic SVG, sanitizes it, and
+persists either `done` with `spec` and `svg` or `failed` with an error message.
+Repeat a request with the same `request_id` within a project to receive the
+existing generation instead of starting another model call.
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:8000/projects/<PROJECT_CODE>/generations \
+  -H "Content-Type: application/json" \
+  -H "X-Project-Token: <PROJECT_OWNER_TOKEN>" \
+  -d '{
+    "request_id": "launch-banner-001",
+    "prompt": "A square launch banner for our student technology club",
+    "width": 1080,
+    "height": 1080
+  }'
+```
+
+Poll the returned generation ID until `status` is `done` or `failed`.
 
 ## Your manual run steps
 

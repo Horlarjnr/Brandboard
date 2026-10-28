@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException, status
 from sqlmodel import Session, select
 
 from app.api.projects import require_project
 from app.db import get_session
 from app.models import Generation, Project
+from app.pipeline.runner import process_generation
 from app.schemas import GenerationCreate, GenerationResponse
 from app.utils.security import token_matches
 
@@ -45,6 +46,7 @@ def require_generation_access(
 def create_generation(
     code: str,
     payload: GenerationCreate,
+    background_tasks: BackgroundTasks,
     x_project_token: str | None = Header(default=None),
     session: Session = Depends(get_session),
 ) -> Generation:
@@ -71,6 +73,7 @@ def create_generation(
     session.add(generation)
     session.commit()
     session.refresh(generation)
+    background_tasks.add_task(process_generation, generation.id)
     return generation
 
 
@@ -108,6 +111,7 @@ def get_generation_for_project(
 def regenerate_generation(
     generation_id: UUID,
     payload: GenerationCreate | None = Body(default=None),
+    background_tasks: BackgroundTasks = None,
     x_project_token: str | None = Header(default=None),
     session: Session = Depends(get_session),
 ) -> Generation:
@@ -132,6 +136,8 @@ def regenerate_generation(
     session.add(child)
     session.commit()
     session.refresh(child)
+    if background_tasks is not None:
+        background_tasks.add_task(process_generation, child.id)
     return child
 
 

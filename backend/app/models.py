@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -26,7 +26,7 @@ class Generation(SQLModel, table=True):
     project_id: UUID = Field(foreign_key="project.id", index=True)
     parent_id: UUID | None = Field(default=None, foreign_key="generation.id")
     version_no: int = Field(default=1, ge=1)
-    request_id: str = Field(unique=True, index=True, max_length=120)
+    request_id: str = Field(index=True, max_length=120)
     prompt: str = Field(max_length=2000)
     width: int = Field(default=1080, ge=1)
     height: int = Field(default=1080, ge=1)
@@ -39,3 +39,5 @@ class Generation(SQLModel, table=True):
     tokens_out: int | None = Field(default=None, ge=0)
     error: str | None = Field(default=None, max_length=2000)
     created_at: datetime = Field(default_factory=utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("project_id", "request_id"),)
