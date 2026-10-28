@@ -50,6 +50,7 @@ def create_generation(
     x_project_token: str | None = Header(default=None),
     session: Session = Depends(get_session),
 ) -> Generation:
+    print('create_generation called with payload:', payload)
     project = require_project(code, x_project_token, session)
     existing = session.exec(
         select(Generation).where(
@@ -148,4 +149,8 @@ def download_generation(
     session: Session = Depends(get_session),
 ) -> dict[str, str | None]:
     generation = require_generation_access(generation_id, x_project_token, session)
-    return {"svg": generation.svg, "status": generation.status}
+    return {
+        "html": generation.html,
+        "svg": generation.svg,
+        "status": generation.status,
+    }

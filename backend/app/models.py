@@ -33,10 +33,12 @@ class Generation(SQLModel, table=True):
     status: str = Field(default="queued", max_length=20)
     step: str | None = Field(default=None, max_length=40)
     spec: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
+    html: str | None = Field(default=None)
     svg: str | None = Field(default=None)
     model: str | None = Field(default=None, max_length=80)
     tokens_in: int | None = Field(default=None, ge=0)
     tokens_out: int | None = Field(default=None, ge=0)
+    error_code: str | None = Field(default=None, max_length=60)
     error: str | None = Field(default=None, max_length=2000)
     created_at: datetime = Field(default_factory=utcnow, nullable=False)
 

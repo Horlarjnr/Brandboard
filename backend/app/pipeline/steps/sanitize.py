@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from xml.etree import ElementTree
 
+import bleach
+
 ALLOWED_TAGS = {"svg", "rect", "text", "path", "circle", "g"}
 ALLOWED_ATTRIBUTES = {
     "aria-label",
@@ -57,3 +59,22 @@ def sanitize_svg(svg: str) -> str:
                 del element.attrib[attribute]
 
     return ElementTree.tostring(root, encoding="unicode", short_empty_elements=True)
+
+
+def sanitize_html(document: str) -> str:
+    allowed_tags = {
+        "html", "head", "body", "meta", "style", "main", "section", "div",
+        "span", "i", "h1", "p", "svg", "rect", "circle", "path",
+    }
+    allowed_attributes = {
+        "class", "content", "lang", "name", "charset", "aria-hidden",
+        "viewBox", "x", "y", "width", "height", "rx", "fill", "opacity",
+        "stroke", "stroke-width",
+    }
+    return bleach.clean(
+        document,
+        tags=allowed_tags,
+        attributes={tag: allowed_attributes for tag in allowed_tags},
+        protocols=[],
+        strip=True,
+    )

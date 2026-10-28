@@ -1,9 +1,23 @@
 .venv/
 .env
+.env.*
+!.env.example
 __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.py[cod]
+
+# Test and coverage output
+.coverage
+coverage.xml
+htmlcov/
+
+# Python packaging/build output
+build/
+dist/
+*.egg-info/
+
+# Logs and local runtime output
+*.log
 storage/*
 !storage/.gitkeep
-alembic.ini

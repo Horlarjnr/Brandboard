@@ -15,6 +15,9 @@ class BannerSpec(BaseModel):
     subtext: str = Field(min_length=1, max_length=140)
     cta: str | None = Field(default=None, max_length=24)
     art_prompt: str | None = Field(default=None, max_length=500)
+    badge: str | None = Field(default=None, max_length=28)
+    highlight: str | None = Field(default=None, max_length=40)
+    brand_label: str | None = Field(default=None, max_length=80)
     tone: Literal["bold", "friendly", "minimal", "premium"] = "bold"
 
     @field_validator("eyebrow", "headline", "subtext", "cta", "art_prompt")

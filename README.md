@@ -102,7 +102,8 @@ The initial backend slice currently includes:
 - Protected project read and update endpoints.
 - Asynchronous generation lifecycle with brief, compose, and sanitize steps.
 - Idempotent generation creation, status polling, regeneration, and SVG download.
-- Safe deterministic SVG composition and allowlist-based SVG sanitization.
+- Safe deterministic HTML/CSS canvas composition with inline SVG artwork.
+- Allowlist-based HTML and SVG sanitization for frontend rendering.
 - Ruff configuration and a health endpoint test.
 
 The project token is returned only by `POST /projects`. Store it in the frontend
@@ -188,10 +189,16 @@ GET  /generations/{id}/download
 ```
 
 Generation creation returns `202 Accepted` with `queued` status. The backend
-then runs the brief model, composes deterministic SVG, sanitizes it, and
-persists either `done` with `spec` and `svg` or `failed` with an error message.
+then runs the brief model, composes a frontend-ready HTML canvas with CSS and
+inline SVG artwork, sanitizes it, and persists either `done` with `spec`, `html`,
+and `svg` or `failed` with an `error_code` and safe error message.
 Repeat a request with the same `request_id` within a project to receive the
 existing generation instead of starting another model call.
+
+The generated document follows the frontend's expected shape: a fixed-size
+`.canvas`, a text/content column, optional badge and highlighted phrase, CTA,
+and optional artwork. The model supplies creative intent through `BannerSpec`;
+it does not supply executable HTML, CSS, SVG, remote fonts, or arbitrary colors.
 
 Example:
 

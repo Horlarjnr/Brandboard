@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from uuid import UUID
 
 from sqlmodel import Session
@@ -8,9 +9,12 @@ from sqlmodel import Session
 from app.config import get_settings
 from app.models import Generation, Project
 from app.pipeline.context import GenerationContext
+from app.pipeline.errors import PipelineError
 from app.pipeline.steps import brief
-from app.pipeline.steps.compose import compose_svg
-from app.pipeline.steps.sanitize import sanitize_svg
+from app.pipeline.steps.compose import compose_html, compose_svg
+from app.pipeline.steps.sanitize import sanitize_html, sanitize_svg
+
+logger = logging.getLogger(__name__)
 
 
 async def run_generation_async(
@@ -41,6 +45,7 @@ async def run_generation_async(
     session.commit()
     session.refresh(generation)
 
+    current_stage = "brief"
     try:
         spec = await brief.run(
             name=project.name,
@@ -53,6 +58,7 @@ async def run_generation_async(
         context.spec = spec
         generation.spec = spec.model_dump(mode="json")
         generation.step = "compose"
+        current_stage = "compose"
         session.add(generation)
         session.commit()
 
@@ -62,7 +68,18 @@ async def run_generation_async(
             width=generation.width,
             height=generation.height,
         )
+        generation.html = sanitize_html(
+            compose_html(
+                spec=spec,
+                brand_name=project.name,
+                font=project.font,
+                colors=project.colors,
+                width=generation.width,
+                height=generation.height,
+            )
+        )
         generation.step = "sanitize"
+        current_stage = "sanitize"
         generation.svg = sanitize_svg(context.final_svg)
         generation.status = "done"
         generation.model = get_settings().model_brief
@@ -70,14 +87,25 @@ async def run_generation_async(
         session.commit()
         session.refresh(generation)
         return context
-    except Exception as exc:  # pragma: no cover - defensive handling for queued tasks
+    except PipelineError as exc:
         generation.status = "failed"
-        generation.step = "brief"
-        generation.error = str(exc)
+        generation.step = exc.stage
+        generation.error_code = exc.code
+        generation.error = exc.message
         session.add(generation)
         session.commit()
         session.refresh(generation)
-        raise
+        return context
+    except Exception:  # pragma: no cover - defensive handling for queued tasks
+        logger.exception("Generation %s failed during %s", generation_id, current_stage)
+        generation.status = "failed"
+        generation.step = current_stage
+        generation.error_code = f"{current_stage}_failed"
+        generation.error = "The banner could not be generated. Please try again."
+        session.add(generation)
+        session.commit()
+        session.refresh(generation)
+        return context
 
 
 def process_generation(generation_id: UUID) -> None:
