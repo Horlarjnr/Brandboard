@@ -74,16 +74,12 @@ The service should expose:
 Configuration belongs in environment variables rather than source code. The eventual `.env.example` should include:
 
 ```text
-# Option A: provide the complete SQLAlchemy URL.
-DATABASE_URL=postgresql+psycopg://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
-
-# Option B: provide database components and let the backend build the URL.
-DB_HOST=db.[PROJECT-REF].supabase.co
-DB_PORT=5432
-DB_NAME=postgres
-DB_USER=postgres
-DB_PASSWORD=
-DB_SSLMODE=require
+# Supabase connection variables used by app/db.py.
+user=postgres.[PROJECT-REF]
+password=[PASSWORD]
+host=aws-0-[REGION].pooler.supabase.com
+port=5432
+dbname=postgres
 STORAGE_ROOT=./storage
 OPENROUTER_API_KEY=
 MODEL_BRIEF=
@@ -117,11 +113,9 @@ client because the backend stores only its hash.
 settings from `backend/.env`. [app/db.py](./backend/app/db.py) creates the
 SQLModel engine and provides a request-scoped database session.
 
-Set either `DATABASE_URL` or all of `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`,
-and `DB_PASSWORD`. `DB_SSLMODE` is optional and should normally be `require`
-for Supabase. When `DATABASE_URL` is present, it takes precedence over all
-component variables. The backend URL builder safely quotes special characters
-in the database username, password, and database name.
+The backend reads the lowercase variable names exactly as shown. Use the
+Supabase connection details from the dashboard, preferably the pooler details
+when the direct database host is unreachable on the current network.
 
 ### 2. Database schema
 
@@ -191,30 +185,40 @@ cp .env.example .env
 
 Edit `backend/.env` and choose one of the following database configurations.
 
-Complete URL:
+Set these variables in `backend/.env`:
 
 ```text
-DATABASE_URL=postgresql+psycopg://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+user=postgres.[PROJECT-REF]
+password=[PASSWORD]
+host=aws-0-[REGION].pooler.supabase.com
+port=5432
+dbname=postgres
 ```
 
-Or separate components:
+The backend constructs the following URL:
 
 ```text
-DATABASE_URL=
-DB_HOST=db.[PROJECT-REF].supabase.co
-DB_PORT=5432
-DB_NAME=postgres
-DB_USER=postgres
-DB_PASSWORD=[PASSWORD]
-DB_SSLMODE=require
+postgresql+psycopg2://user:password@host:port/dbname?sslmode=require
 ```
 
-The complete URL takes precedence when both configurations are present. Then
-apply the schema:
+Then apply the schema:
 
 ```bash
 alembic upgrade head
 ```
+
+If Alembic reports `ValueError: invalid interpolation syntax`, the password is
+probably URL-encoded (for example, it contains `%21`). The migration
+configuration uses the URL directly and should not produce this error after
+updating the backend. Do not remove URL encoding from passwords.
+
+If PostgreSQL reports `Network is unreachable` and the Supabase hostname
+resolves to an IPv6 address, the current network does not have an IPv6 route.
+Use the Supabase connection pooler URL from the dashboard, typically the
+session or transaction pooler connection, instead of the direct database host.
+The pooler host is designed for client connections and is commonly reachable
+on IPv4 networks. Keep the corresponding pooler port, username, and database
+name together when switching connection strings.
 
 Start the development server yourself:
 
