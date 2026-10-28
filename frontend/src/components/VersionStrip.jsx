@@ -13,14 +13,15 @@ export default function VersionStrip({ versions, activeId, onSelect, font }) {
       <h3 className="section-title">Version history</h3>
       <div className="version-row">
         {list.map((v) => {
-          const preset = SIZE_PRESETS.find((s) => s.id === v.size) || SIZE_PRESETS[0]
+          const found = SIZE_PRESETS.find((s) => s.id === v.size) || SIZE_PRESETS[0]
+          const preset = v.width && v.height ? { width: v.width, height: v.height } : found
           const active = v.id === activeId
           return (
             <div key={v.id} className={`version ${active ? 'active' : ''}`}>
               <div className="version-thumb">
-                {v.svg ? (
+                {v.markup ? (
                   <BannerFrame
-                    markup={v.svg}
+                    markup={v.markup}
                     width={preset.width}
                     height={preset.height}
                     font={font}

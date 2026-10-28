@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
-import { getProject, getGeneration } from '../lib/api.js'
+import { getProject, getGeneration, renumber } from '../lib/api.js'
 import { getToken } from '../lib/storage.js'
 import { SIZE_PRESETS, STEP_LABELS } from '../lib/constants.js'
 import { slug } from '../lib/format.js'
-import { exportBanner, copyBannerToClipboard, isSvgMarkup } from '../lib/exportImage.js'
+import { exportBanner, copyBannerToClipboard } from '../lib/exportImage.js'
 import useGeneration from '../hooks/useGeneration.js'
 import Avatar from '../components/Avatar.jsx'
 import BrandKit from '../components/BrandKit.jsx'
@@ -27,6 +27,11 @@ export default function Workspace() {
   const [toast, setToast] = useState('')
   const toastTimer = useRef(null)
   const lastRun = useRef(null)
+  const versionsRef = useRef([])
+
+  useEffect(() => {
+    versionsRef.current = versions
+  }, [versions])
 
   const gen = useGeneration(code, token)
   const { reset: resetGeneration } = gen
@@ -65,15 +70,17 @@ export default function Workspace() {
   useEffect(() => {
     if (gen.phase === 'done' && gen.result) {
       const v = gen.result
-      setVersions((list) => (list.some((x) => x.id === v.id) ? list : [...list, v]))
-      setCurrent(v)
+      const list = versionsRef.current
+      const next = list.some((x) => x.id === v.id) ? list : renumber([...list, v])
+      setVersions(next)
+      setCurrent(next.find((x) => x.id === v.id))
       flash('Banner generated!')
     }
   }, [gen.phase, gen.result, flash])
 
   const selectVersion = useCallback(
     async (v) => {
-      if (v.svg) return setCurrent(v)
+      if (v.markup) return setCurrent(v)
       try {
         const full = await getGeneration(v.id, token)
         setVersions((list) => list.map((x) => (x.id === v.id ? { ...x, ...full } : x)))
@@ -91,13 +98,15 @@ export default function Workspace() {
   }
 
   const busy = gen.phase === 'pending'
-  const dims = SIZE_PRESETS.find((s) => s.id === (busy ? size : current?.size || size)) || SIZE_PRESETS[0]
-  const canExport = Boolean(current) && isSvgMarkup(current.svg)
+  const preset = SIZE_PRESETS.find((s) => s.id === (busy ? size : current?.size || size)) || SIZE_PRESETS[0]
+  // A real generation carries its own width/height; use those so odd sizes still display correctly.
+  const dims = !busy && current?.width && current?.height ? { width: current.width, height: current.height } : preset
+  const canExport = Boolean(current?.markup)
 
   async function onDownload({ format, scale }) {
     try {
       await exportBanner({
-        markup: current.svg,
+        markup: current.markup,
         width: dims.width,
         height: dims.height,
         format,
@@ -113,7 +122,7 @@ export default function Workspace() {
 
   async function onCopy() {
     try {
-      await copyBannerToClipboard({ markup: current.svg, width: dims.width, height: dims.height, font: project.font })
+      await copyBannerToClipboard({ markup: current.markup, width: dims.width, height: dims.height, font: project.font })
       flash('Copied to clipboard')
     } catch (e) {
       flash(e.message)
@@ -178,7 +187,7 @@ export default function Workspace() {
 
       <div className="stage">
         <BannerCanvas
-          markup={current?.svg}
+          markup={current?.markup}
           width={dims.width}
           height={dims.height}
           font={project.font}

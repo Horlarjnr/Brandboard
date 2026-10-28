@@ -4,6 +4,9 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import './styles/tokens.css'
 import './styles/global.css'
+import { warmUp } from './lib/api.js'
+
+warmUp()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

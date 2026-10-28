@@ -17,19 +17,20 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-By default the app runs in **mock mode** (`VITE_USE_MOCK=true`): a fake backend
-inside the browser, so the whole flow works with no server. On the landing page,
-"load demo projects" adds two ready-made projects (TechNest and Sunrise Bakery).
-In the mock, a prompt containing the word "fail" shows the error state.
+The app talks to the live backend at https://brandboard.onrender.com by default
+(`VITE_USE_MOCK=false`). Requests go to `/api/*`, which the Vite dev proxy
+(`vite.config.js`) and the Vercel/Netlify rewrites (`vercel.json`,
+`public/_redirects`) forward to Render, so no CORS setup is needed.
 
-To use the real API, set this in `.env.local` and restart:
+The free Render service sleeps when idle; the first request can take up to a
+minute. The app pings `/health` on load to wake it.
 
-```
-VITE_USE_MOCK=false
-VITE_API_URL=http://localhost:8000
-```
+To work offline with the in-browser fake backend, set `VITE_USE_MOCK=true` in
+`.env.local` and restart. "load demo projects" then appears on the landing page,
+and a prompt containing the word "fail" shows the error state.
 
-The backend must allow CORS for `http://localhost:5173`.
+To call the backend directly (no proxy), set `VITE_API_URL=https://brandboard.onrender.com`
+and add `CORSMiddleware` to `backend/app/main.py`.
 
 ## Themes (light / dark)
 

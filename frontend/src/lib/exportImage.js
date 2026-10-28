@@ -7,6 +7,33 @@ export function isSvgMarkup(markup) {
   return typeof markup === 'string' && markup.trimStart().startsWith('<svg')
 }
 
+export function isHtmlMarkup(markup) {
+  return typeof markup === 'string' && /^\s*<!doctype html|^\s*<html/i.test(markup)
+}
+
+const escXml = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+// The backend's designed banner is an HTML page. To rasterize it we wrap it in an SVG
+// <foreignObject> (well-formed XHTML), which the browser can then draw onto a canvas.
+function htmlToSvg(html, width, height) {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const xml = new XMLSerializer()
+  const css = [...doc.querySelectorAll('style')].map((s) => s.textContent).join('\n')
+  const body = [...doc.body.childNodes].map((n) => xml.serializeToString(n)).join('')
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+    `<foreignObject x="0" y="0" width="${width}" height="${height}">` +
+    `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px"><style>${escXml(css)}</style>${body}</div>` +
+    `</foreignObject></svg>`
+  )
+}
+
+function toSvgMarkup(markup, width, height) {
+  if (isSvgMarkup(markup)) return markup
+  if (isHtmlMarkup(markup)) return htmlToSvg(markup, width, height)
+  throw new Error('This banner cannot be exported')
+}
+
 function download(blob, filename) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -95,19 +122,17 @@ function rasterize(svgMarkup, width, height, scale, type, quality) {
 }
 
 export async function exportBanner({ markup, width, height, format = 'png', scale = 1, name = 'banner', font }) {
-  if (!isSvgMarkup(markup)) throw new Error('Export currently supports SVG banners only')
   const type = format === 'jpeg' ? 'image/jpeg' : 'image/png'
-  const svg = await withEmbeddedFont(markup, font)
+  const svg = await withEmbeddedFont(toSvgMarkup(markup, width, height), font)
   const blob = await rasterize(svg, width, height, scale, type, 0.92)
   download(blob, `${name}@${scale}x.${format === 'jpeg' ? 'jpg' : 'png'}`)
 }
 
 export async function copyBannerToClipboard({ markup, width, height, font }) {
-  if (!isSvgMarkup(markup)) throw new Error('Copy currently supports SVG banners only')
   if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
     throw new Error('Copying images is not supported in this browser')
   }
-  const svg = await withEmbeddedFont(markup, font)
+  const svg = await withEmbeddedFont(toSvgMarkup(markup, width, height), font)
   const blob = await rasterize(svg, width, height, 1, 'image/png')
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
 }

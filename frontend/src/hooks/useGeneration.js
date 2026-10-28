@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { startGeneration, getGeneration } from '../lib/api.js'
 import { POLL_INTERVAL_MS } from '../lib/constants.js'
+import { rememberGeneration } from '../lib/storage.js'
 
 const IDLE = { phase: 'idle', step: null, result: null, error: null, generationId: null }
 
@@ -28,12 +29,15 @@ export default function useGeneration(code, token) {
       try {
         const { id } = await startGeneration(code, token, { requestId, prompt, size, parentId })
         if (cancelled.current) return
+        rememberGeneration(code, id)
         setState((s) => ({ ...s, generationId: id }))
+        let netErrors = 0
         const poll = async () => {
           if (cancelled.current) return
           try {
             const g = await getGeneration(id, token)
             if (cancelled.current) return
+            netErrors = 0
             if (g.status === 'done') {
               setState({ phase: 'done', step: g.step, result: g, error: null, generationId: id })
             } else if (g.status === 'failed') {
@@ -49,6 +53,11 @@ export default function useGeneration(code, token) {
               timer.current = setTimeout(poll, POLL_INTERVAL_MS)
             }
           } catch (e) {
+            // A dropped request (status 0) while the server is busy is retried a few times.
+            if (e.status === 0 && ++netErrors < 5) {
+              timer.current = setTimeout(poll, POLL_INTERVAL_MS * 2)
+              return
+            }
             setState({ phase: 'failed', step: null, result: null, error: e.message, generationId: id })
           }
         }

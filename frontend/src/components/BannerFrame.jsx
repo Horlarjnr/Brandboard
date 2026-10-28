@@ -9,6 +9,13 @@ import { fontStylesheetUrl } from '../lib/fonts.js'
 // - The brand font is loaded inside the iframe (it cannot see the page's fonts).
 function buildDoc(markup, font) {
   const link = font ? `<link rel="stylesheet" href="${fontStylesheetUrl(font)}">` : ''
+  // The backend's designed banner is a complete HTML document: use it as is and add the font link.
+  if (/^\s*<!doctype html|^\s*<html/i.test(markup)) {
+    const reset = '<style>html,body{margin:0;overflow:hidden;background:transparent}</style>'
+    return /<\/head>/i.test(markup)
+      ? markup.replace(/<\/head>/i, `${link}${reset}</head>`)
+      : `<!doctype html><html><head><meta charset="utf-8">${link}${reset}</head><body>${markup}</body></html>`
+  }
   return (
     '<!doctype html><html><head><meta charset="utf-8">' +
     link +

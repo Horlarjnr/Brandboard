@@ -1,9 +1,15 @@
 // Single place that talks to the backend. Everything else imports from here.
-// Contract source: plan.md in the repo root.
+// Real contract = the FastAPI code in backend/app (api/projects.py, api/generations.py, schemas.py).
 // Set VITE_USE_MOCK=false in .env.local to use the real API.
 import * as mock from './mockApi.js'
+import { SIZE_PRESETS } from './constants.js'
+import { getGenerationIds } from './storage.js'
 
-const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
+// "/api" goes through the Vite dev proxy / Vercel / Netlify rewrite to the Render backend,
+// so the browser never makes a cross-origin call (the backend has no CORS middleware yet).
+// To call the backend directly instead, set VITE_API_URL=https://brandboard.onrender.com
+// and add CORSMiddleware to backend/app/main.py.
+const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
 
 export class ApiError extends Error {
@@ -14,21 +20,36 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = 'GET', token, json, form } = {}) {
+// FastAPI sends `detail` as a string for HTTPException and as a list for 422 validation errors.
+function detailMessage(detail, status) {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map((d) => {
+        const field = Array.isArray(d.loc) ? d.loc.filter((p) => p !== 'body').join('.') : ''
+        return field ? `${field}: ${d.msg}` : d.msg
+      })
+      .join('; ')
+  }
+  return `Request failed (${status})`
+}
+
+async function request(path, { method = 'GET', token, json } = {}) {
   const headers = {}
   if (token) headers['X-Project-Token'] = token
   let body
   if (json) {
     headers['Content-Type'] = 'application/json'
     body = JSON.stringify(json)
-  } else if (form) {
-    body = form // the browser sets the multipart boundary
   }
   let res
   try {
     res = await fetch(`${API_URL}${path}`, { method, headers, body })
   } catch {
-    throw new ApiError('Cannot reach the server. Is the backend running?', 0)
+    throw new ApiError(
+      'Cannot reach the server. The free Render backend can take up to a minute to wake up, so try again shortly.',
+      0,
+    )
   }
   const text = await res.text()
   let data = null
@@ -39,58 +60,134 @@ async function request(path, { method = 'GET', token, json, form } = {}) {
   }
   if (!res.ok) {
     const detail = data && typeof data === 'object' ? data.detail : null
-    const message = typeof detail === 'string' ? detail : `Request failed (${res.status})`
-    throw new ApiError(message, res.status, data)
+    throw new ApiError(detailMessage(detail, res.status), res.status, data)
   }
   return data
 }
 
-// TODO(backend): confirm multipart field names. plan.md says the request holds
-// name, description, three colors, optional font and optional logo.
-function buildProjectForm({ name, description, colors, font, logo }) {
-  const form = new FormData()
-  form.append('name', name)
-  form.append('description', description)
-  form.append('primary_color', colors.primary)
-  form.append('accent_color', colors.accent)
-  form.append('tertiary_color', colors.tertiary)
-  if (font) form.append('font', font)
-  if (logo) form.append('logo', logo)
-  return form
+// ---- helpers -------------------------------------------------------------
+
+// The backend stores naive UTC timestamps and sends them without a "Z",
+// which JavaScript would read as local time. Mark them as UTC.
+function utc(iso) {
+  if (typeof iso !== 'string') return iso
+  return /([zZ]|[+-]\d\d:?\d\d)$/.test(iso) ? iso : `${iso}Z`
 }
 
-// Expected: { code, owner_token, ...project }
-export function createProject(values) {
-  if (USE_MOCK) return mock.createProject(values)
-  return request('/projects', { method: 'POST', form: buildProjectForm(values) })
+function sizeIdFor(width, height) {
+  return SIZE_PRESETS.find((s) => s.width === width && s.height === height)?.id ?? 'custom'
 }
 
-// Expected: { code, name, description, colors, font, logo_url?, generations: [...] }
-// Each generation: { id, version_no, parent_id, prompt, size, created_at, svg? }
-export function getProject(code, token) {
-  if (USE_MOCK) return mock.getProject(code, token)
-  return request(`/projects/${code}`, { token })
+// Backend generation -> the shape the UI uses.
+//   markup = what to display (the designed HTML banner, or the plain SVG if there is no HTML)
+//   svg    = the backend's plain SVG, kept for reference
+function normalizeGeneration(g) {
+  return {
+    ...g,
+    created_at: utc(g.created_at),
+    size: sizeIdFor(g.width, g.height),
+    markup: g.html || g.svg || null,
+  }
 }
 
-// Expected: 202 { id, status }
-export function startGeneration(code, token, { requestId, prompt, size, parentId = null }) {
-  if (USE_MOCK) return mock.startGeneration(code, token, { requestId, prompt, size, parentId })
-  return request(`/projects/${code}/generations`, {
+// The backend never increments version_no (every row is 1), so number versions by creation order.
+export function renumber(list) {
+  return [...list]
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    .map((g, i) => ({ ...g, version_no: i + 1 }))
+}
+
+// ---- projects ------------------------------------------------------------
+
+// The backend takes JSON and has no logo upload yet, so `logo` is not sent.
+// Returns { code, owner_token, id, name, description, colors, font, created_at }
+export function createProject({ name, description, colors, font, logo }) {
+  if (USE_MOCK) return mock.createProject({ name, description, colors, font, logo })
+  return request('/projects', {
     method: 'POST',
-    token,
-    json: { request_id: requestId, prompt, size, parent_id: parentId },
+    json: {
+      name,
+      description,
+      colors: { primary: colors.primary, accent: colors.accent, tertiary: colors.tertiary },
+      font: font || 'Inter',
+    },
   })
 }
 
-// Expected: { id, status: queued|running|done|failed, step, svg, spec, error, version_no, parent_id, created_at }
-export function getGeneration(id, token) {
-  if (USE_MOCK) return mock.getGeneration(id, token)
-  return request(`/generations/${id}`, { token })
+// GET /projects/{code} returns the project only (no generation list). We load the
+// history ourselves: first from GET /projects/{code}/generations if the backend has
+// that route, otherwise from the generation ids this browser remembered.
+export async function getProject(code, token) {
+  if (USE_MOCK) return mock.getProject(code, token)
+  const project = await request(`/projects/${code}`, { token })
+  const generations = await loadHistory(code, token)
+  return { ...project, generations }
 }
 
-export function regenerate(id, token) {
+async function loadHistory(code, token) {
+  let rows = null
+  try {
+    rows = await request(`/projects/${code}/generations`, { token })
+  } catch (e) {
+    if (e.status !== 404 && e.status !== 405) throw e
+  }
+  if (!Array.isArray(rows)) {
+    const ids = getGenerationIds(code)
+    const settled = await Promise.allSettled(ids.map((id) => request(`/generations/${id}`, { token })))
+    rows = settled.filter((r) => r.status === 'fulfilled').map((r) => r.value)
+  }
+  return renumber(rows.filter((g) => g.status === 'done').map(normalizeGeneration))
+}
+
+// ---- generations ---------------------------------------------------------
+
+// Backend wants width/height, not a preset name. Returns 202 with the full generation row.
+export async function startGeneration(code, token, { requestId, prompt, size, parentId = null }) {
+  if (USE_MOCK) return mock.startGeneration(code, token, { requestId, prompt, size, parentId })
+  const preset = SIZE_PRESETS.find((s) => s.id === size) || SIZE_PRESETS[0]
+  const g = await request(`/projects/${code}/generations`, {
+    method: 'POST',
+    token,
+    json: {
+      request_id: requestId,
+      prompt,
+      width: preset.width,
+      height: preset.height,
+      parent_id: parentId,
+    },
+  })
+  return normalizeGeneration(g)
+}
+
+// status: queued | running | done | failed. step: brief | compose | sanitize.
+export async function getGeneration(id, token) {
+  if (USE_MOCK) return mock.getGeneration(id, token)
+  return normalizeGeneration(await request(`/generations/${id}`, { token }))
+}
+
+// Sends a fresh request_id: without a body the backend uses "regen-<id>" and a second
+// regenerate of the same generation hits its unique (project, request_id) constraint.
+export async function regenerate(id, token) {
   if (USE_MOCK) return mock.regenerate(id, token)
-  return request(`/generations/${id}/regenerate`, { method: 'POST', token })
+  const current = await request(`/generations/${id}`, { token })
+  const g = await request(`/generations/${id}/regenerate`, {
+    method: 'POST',
+    token,
+    json: {
+      request_id: crypto.randomUUID(),
+      prompt: current.prompt,
+      width: current.width,
+      height: current.height,
+      parent_id: id,
+    },
+  })
+  return normalizeGeneration(g)
+}
+
+// Wakes the Render free-tier service so the first real request is not slow.
+export function warmUp() {
+  if (USE_MOCK) return
+  fetch(`${API_URL}/health`).catch(() => {})
 }
 
 // Demo data for presentations. Only exists in mock mode.
@@ -99,3 +196,5 @@ export async function seedDemoProjects() {
 }
 
 export const isMockMode = USE_MOCK
+// The backend has no logo upload route yet (plan.md lists assets.py, but it is not built).
+export const supportsLogo = USE_MOCK

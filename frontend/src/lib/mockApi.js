@@ -108,7 +108,7 @@ export async function getProject(code, token) {
     .map((id) => db.generations[id])
     .filter((g) => g.status === 'done')
     .map(({ id, version_no, parent_id, prompt, size, created_at, svg }) => ({
-      id, version_no, parent_id, prompt, size, created_at, svg, status: 'done',
+      id, version_no, parent_id, prompt, size, created_at, svg, markup: svg, status: 'done',
     }))
   return { ...pub, generations }
 }
@@ -154,6 +154,7 @@ export async function getGeneration(id, token) {
       g.status = 'done'
       g.step = 'sanitize'
       g.svg = fakeBanner(p, g.prompt, preset.width, preset.height)
+      g.markup = g.svg
       g.spec = { headline: g.prompt.slice(0, 60), tone: 'bold', layout: 'split_hero' }
     } else {
       g.status = age > 700 ? 'running' : 'queued'
@@ -212,6 +213,7 @@ export async function seedDemoProjects() {
           id, project: code, request_id: uuid(), prompt, size: preset.id, parent_id: null,
           version_no: i + 1, status: 'done', step: 'sanitize',
           svg: fakeBanner(p, prompt, preset.width, preset.height),
+          markup: fakeBanner(p, prompt, preset.width, preset.height),
           spec: { headline: prompt, tone: 'bold', layout: 'split_hero' },
           error: null, created_at: t, started: t,
         }

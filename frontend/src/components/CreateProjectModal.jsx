@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createProject } from '../lib/api.js'
+import { createProject, supportsLogo } from '../lib/api.js'
 import { COLOR_LABELS, DEFAULT_COLORS, FONTS, LOGO_TYPES, MAX_LOGO_BYTES } from '../lib/constants.js'
 import { ensureFontLoaded } from '../lib/fonts.js'
 import { isHex } from '../lib/colors.js'
@@ -157,6 +157,7 @@ export default function CreateProjectModal({ onClose, onCreated }) {
           </div>
         </div>
 
+        {supportsLogo && (
         <div className="field">
           <span className="field-label">Logo upload (optional)</span>
           {logo ? (
@@ -199,6 +200,7 @@ export default function CreateProjectModal({ onClose, onCreated }) {
             </label>
           )}
         </div>
+        )}
 
         {error && (
           <p className="error" role="alert">
