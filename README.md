@@ -207,6 +207,50 @@ Then apply the schema:
 alembic upgrade head
 ```
 
+## AI setup
+
+The AI layer uses OpenRouter through LangChain's `ChatOpenAI` integration.
+Configure the provider in `backend/.env`:
+
+```text
+OPENROUTER_API_KEY=your-openrouter-key
+MODEL_BRIEF=your-brief-model
+MODEL_ART=your-art-model
+```
+
+`MODEL_BRIEF` is used for structured banner copy. `MODEL_ART` is reserved for
+the optional artwork step. The application does not call either model until a
+pipeline step explicitly requests it.
+
+The role-based client is implemented in
+[app/llm/client.py](./backend/app/llm/client.py). It:
+
+- Routes `brief` and `art` to separate configurable models.
+- Uses `https://openrouter.ai/api/v1`.
+- Applies a 60-second timeout and two retries.
+- Fails explicitly when the API key or requested role model is not configured.
+
+The first structured AI stage is implemented in
+[app/pipeline/steps/brief.py](./backend/app/pipeline/steps/brief.py). It sends
+the brand context, requested dimensions, and user prompt to the model, then
+validates the result as [BannerSpec](./backend/app/pipeline/spec.py).
+
+`BannerSpec` currently allows:
+
+- `split_hero`, `centered`, `image_right`, or `text_only` layouts.
+- A headline up to 60 characters.
+- Supporting text up to 140 characters.
+- A CTA up to 24 characters.
+- `bold`, `friendly`, `minimal`, or `premium` tone.
+
+Markup characters are removed from model-produced text before the spec is
+returned. The model supplies copy and layout intent only; it does not supply
+HTML, SVG, CSS, or arbitrary brand colors.
+
+The prompt used by this stage is stored at
+[brief.md](./backend/app/llm/prompts/brief.md), so prompt changes do not require
+changing Python code.
+
 If Alembic reports `ValueError: invalid interpolation syntax`, the password is
 probably URL-encoded (for example, it contains `%21`). The migration
 configuration uses the URL directly and should not produce this error after

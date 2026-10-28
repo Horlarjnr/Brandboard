@@ -9,23 +9,23 @@ class Settings(BaseSettings):
     database_url: str | None = Field(default=None, validation_alias="DATABASE_URL")
     database_host: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("DB_HOST", "HOST"),
+        validation_alias=AliasChoices("DB_HOST", "HOST", "host"),
     )
     database_port: int = Field(
         default=5432,
-        validation_alias=AliasChoices("DB_PORT", "PORT"),
+        validation_alias=AliasChoices("DB_PORT", "PORT", "port"),
     )
     database_name: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("DB_NAME", "DATABASE"),
+        validation_alias=AliasChoices("DB_NAME", "DATABASE", "dbname"),
     )
     database_user: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("DB_USER", "USER"),
+        validation_alias=AliasChoices("DB_USER", "USER", "user"),
     )
     database_password: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("DB_PASSWORD", "PASSWORD"),
+        validation_alias=AliasChoices("DB_PASSWORD", "PASSWORD", "password"),
     )
     database_sslmode: str | None = Field(default=None, validation_alias="DB_SSLMODE")
     storage_root: str = Field(default="./storage", alias="STORAGE_ROOT")
