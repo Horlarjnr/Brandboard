@@ -9,11 +9,11 @@ class Settings(BaseSettings):
     database_url: str | None = Field(default=None, validation_alias="DATABASE_URL")
     database_host: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("DB_HOST", "HOST", "host"),
+        validation_alias=AliasChoices("DB_HOST", "host"),
     )
     database_port: int = Field(
         default=5432,
-        validation_alias=AliasChoices("DB_PORT", "PORT", "port"),
+        validation_alias=AliasChoices("DB_PORT", "port"),
     )
     database_name: str | None = Field(
         default=None,
@@ -21,11 +21,11 @@ class Settings(BaseSettings):
     )
     database_user: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("DB_USER", "USER", "user"),
+        validation_alias=AliasChoices("DB_USER", "user"),
     )
     database_password: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("DB_PASSWORD", "PASSWORD", "password"),
+        validation_alias=AliasChoices("DB_PASSWORD", "password"),
     )
     database_sslmode: str | None = Field(default=None, validation_alias="DB_SSLMODE")
     storage_root: str = Field(default="./storage", alias="STORAGE_ROOT")
@@ -37,7 +37,12 @@ class Settings(BaseSettings):
         default=50, alias="DAILY_PROJECT_GENERATION_CAP", gt=0
     )
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
 
     @model_validator(mode="after")
     def build_database_url(self) -> "Settings":
@@ -64,12 +69,11 @@ class Settings(BaseSettings):
         credentials = (
             f"{quote_plus(self.database_user)}:{quote_plus(self.database_password)}"
         )
+        sslmode = quote_plus(self.database_sslmode or "require")
         self.database_url = (
-            f"postgresql+psycopg://{credentials}@{self.database_host}:"
-            f"{self.database_port}/{quote_plus(self.database_name)}"
+            f"postgresql+psycopg2://{credentials}@{self.database_host}:"
+            f"{self.database_port}/{quote_plus(self.database_name)}?sslmode={sslmode}"
         )
-        if self.database_sslmode:
-            self.database_url += f"?sslmode={quote_plus(self.database_sslmode)}"
         return self
 
 

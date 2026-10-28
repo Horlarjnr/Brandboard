@@ -56,9 +56,11 @@ class GenerationResponse(BaseModel):
     status: str
     step: str | None
     spec: dict | None
+    html: str | None
     svg: str | None
     model: str | None
     tokens_in: int | None
     tokens_out: int | None
+    error_code: str | None
     error: str | None
     created_at: datetime

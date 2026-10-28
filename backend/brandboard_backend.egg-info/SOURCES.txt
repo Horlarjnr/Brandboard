@@ -6,7 +6,16 @@ app/main.py
 app/models.py
 app/schemas.py
 app/api/__init__.py
+app/api/generations.py
 app/api/projects.py
+app/llm/__init__.py
+app/llm/client.py
+app/pipeline/__init__.py
+app/pipeline/context.py
+app/pipeline/runner.py
+app/pipeline/spec.py
+app/pipeline/steps/__init__.py
+app/pipeline/steps/brief.py
 app/utils/__init__.py
 app/utils/ids.py
 app/utils/security.py
@@ -15,4 +24,5 @@ brandboard_backend.egg-info/SOURCES.txt
 brandboard_backend.egg-info/dependency_links.txt
 brandboard_backend.egg-info/requires.txt
 brandboard_backend.egg-info/top_level.txt
+tests/test_banner_spec.py
 tests/test_health.py
