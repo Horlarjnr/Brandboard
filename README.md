@@ -396,6 +396,8 @@ GET  /generations/{id}/download
 
 Regeneration creates a new version linked through `parent_id`. Client-side export should use the completed markup. Server-side image rendering is intentionally deferred until a product requirement needs it.
 
+For a new generation, omit `parent_id` or set it to `null`. For a regeneration or refinement, `parent_id` must be the `id` of an existing generation in the same project; it is not the project ID. Invalid parent IDs return a `400` response with an `invalid_parent_id` error code instead of an internal server error.
+
 ## Data and output safety
 
 The service must:
