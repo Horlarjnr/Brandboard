@@ -43,7 +43,7 @@ The language model never owns the final image. It returns a small validated `Ban
 ## Requirements
 
 - Python 3.11 or newer
-- PostgreSQL installed locally or through Docker
+- A Supabase project with PostgreSQL enabled
 - An OpenRouter API key for live LLM generations
 - Node/Chromium only if optional server-side rendering is later enabled
 
@@ -53,13 +53,16 @@ From the repository root, create and activate a virtual environment in `backend/
 
 ```bash
 cd backend
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
+
+The commands above are instructions for you to run locally. The agent does not
+start the application or connect to Supabase.
 
 The service should expose:
 
@@ -71,7 +74,12 @@ The service should expose:
 Configuration belongs in environment variables rather than source code. The eventual `.env.example` should include:
 
 ```text
-DATABASE_URL=postgresql+psycopg://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+# Supabase connection variables used by app/db.py.
+user=postgres.[PROJECT-REF]
+password=[PASSWORD]
+host=aws-0-[REGION].pooler.supabase.com
+port=5432
+dbname=postgres
 STORAGE_ROOT=./storage
 OPENROUTER_API_KEY=
 MODEL_BRIEF=
@@ -81,6 +89,201 @@ DAILY_PROJECT_GENERATION_CAP=
 ```
 
 Model names, storage backends, and limits must be configurable without changing pipeline code.
+
+## What is implemented
+
+The initial backend slice currently includes:
+
+- FastAPI application setup with `/health`.
+- PostgreSQL SQLModel engine configuration for Supabase.
+- Alembic configuration and the initial `project` table migration.
+- Project creation with a one-time owner token.
+- SHA-256 token storage and constant-time token comparison.
+- Protected project read and update endpoints.
+- Ruff configuration and a health endpoint test.
+
+The project token is returned only by `POST /projects`. Store it in the frontend
+client because the backend stores only its hash.
+
+## Backend walkthrough
+
+### 1. Configuration and database
+
+[app/config.py](./backend/app/config.py) reads `DATABASE_URL` and the other
+settings from `backend/.env`. [app/db.py](./backend/app/db.py) creates the
+SQLModel engine and provides a request-scoped database session.
+
+The backend reads the lowercase variable names exactly as shown. Use the
+Supabase connection details from the dashboard, preferably the pooler details
+when the direct database host is unreachable on the current network.
+
+### 2. Database schema
+
+[migrations/versions/0001_create_projects.py](./backend/migrations/versions/0001_create_projects.py)
+creates the first `project` table. Run the migration against your Supabase
+database before using the project endpoints.
+
+### 3. Project security
+
+[app/utils/ids.py](./backend/app/utils/ids.py) creates a public project code and
+a high-entropy owner token. [app/utils/security.py](./backend/app/utils/security.py)
+hashes the token before persistence and compares presented tokens with a
+constant-time comparison.
+
+The project code is an identifier, not a secret. Protected requests must send:
+
+```text
+X-Project-Token: <project-owner-token>
+```
+
+### 4. Project API
+
+[app/api/projects.py](./backend/app/api/projects.py) provides:
+
+```text
+POST  /projects
+GET   /projects/{code}
+PATCH /projects/{code}
+```
+
+The current create endpoint accepts JSON. Logo multipart handling will be added
+with the asset-storage slice.
+
+Example create request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "TechNest",
+    "description": "A student technology club focused on learning and collaboration.",
+    "colors": {
+      "primary": "#6366F1",
+      "accent": "#10B981",
+      "tertiary": "#A78BFA"
+    },
+    "font": "Inter"
+  }'
+```
+
+Copy the `code` and `owner_token` from the response. Then retrieve the project:
+
+```bash
+curl http://127.0.0.1:8000/projects/<PROJECT_CODE> \
+  -H "X-Project-Token: <PROJECT_OWNER_TOKEN>"
+```
+
+## Your manual run steps
+
+Run these commands from the repository root:
+
+```bash
+cd backend
+source .venv/bin/activate
+cp .env.example .env
+```
+
+Edit `backend/.env` and choose one of the following database configurations.
+
+Set these variables in `backend/.env`:
+
+```text
+user=postgres.[PROJECT-REF]
+password=[PASSWORD]
+host=aws-0-[REGION].pooler.supabase.com
+port=5432
+dbname=postgres
+```
+
+The backend constructs the following URL:
+
+```text
+postgresql+psycopg2://user:password@host:port/dbname?sslmode=require
+```
+
+Then apply the schema:
+
+```bash
+alembic upgrade head
+```
+
+## AI setup
+
+The AI layer uses OpenRouter through LangChain's `ChatOpenAI` integration.
+Configure the provider in `backend/.env`:
+
+```text
+OPENROUTER_API_KEY=your-openrouter-key
+MODEL_BRIEF=your-brief-model
+MODEL_ART=your-art-model
+```
+
+`MODEL_BRIEF` is used for structured banner copy. `MODEL_ART` is reserved for
+the optional artwork step. The application does not call either model until a
+pipeline step explicitly requests it.
+
+The role-based client is implemented in
+[app/llm/client.py](./backend/app/llm/client.py). It:
+
+- Routes `brief` and `art` to separate configurable models.
+- Uses `https://openrouter.ai/api/v1`.
+- Applies a 60-second timeout and two retries.
+- Fails explicitly when the API key or requested role model is not configured.
+
+The first structured AI stage is implemented in
+[app/pipeline/steps/brief.py](./backend/app/pipeline/steps/brief.py). It sends
+the brand context, requested dimensions, and user prompt to the model, then
+validates the result as [BannerSpec](./backend/app/pipeline/spec.py).
+
+`BannerSpec` currently allows:
+
+- `split_hero`, `centered`, `image_right`, or `text_only` layouts.
+- A headline up to 60 characters.
+- Supporting text up to 140 characters.
+- A CTA up to 24 characters.
+- `bold`, `friendly`, `minimal`, or `premium` tone.
+
+Markup characters are removed from model-produced text before the spec is
+returned. The model supplies copy and layout intent only; it does not supply
+HTML, SVG, CSS, or arbitrary brand colors.
+
+The prompt used by this stage is stored at
+[brief.md](./backend/app/llm/prompts/brief.md), so prompt changes do not require
+changing Python code.
+
+If Alembic reports `ValueError: invalid interpolation syntax`, the password is
+probably URL-encoded (for example, it contains `%21`). The migration
+configuration uses the URL directly and should not produce this error after
+updating the backend. Do not remove URL encoding from passwords.
+
+If PostgreSQL reports `Network is unreachable` and the Supabase hostname
+resolves to an IPv6 address, the current network does not have an IPv6 route.
+Use the Supabase connection pooler URL from the dashboard, typically the
+session or transaction pooler connection, instead of the direct database host.
+The pooler host is designed for client connections and is commonly reachable
+on IPv4 networks. Keep the corresponding pooler port, username, and database
+name together when switching connection strings.
+
+Start the development server yourself:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Open `http://127.0.0.1:8000/docs` to use the interactive API documentation, or
+check the health endpoint:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Expected response:
+
+```json
+{"status": "ok"}
+```
+
+Stop the server with `Ctrl+C`.
 
 ## API overview
 
