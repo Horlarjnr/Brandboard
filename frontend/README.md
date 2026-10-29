@@ -17,20 +17,24 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
-The app talks to the live backend at https://brandboard.onrender.com by default
-(`VITE_USE_MOCK=false`). Requests go to `/api/*`, which the Vite dev proxy
-(`vite.config.js`) and the Vercel/Netlify rewrites (`vercel.json`,
-`public/_redirects`) forward to Render, so no CORS setup is needed.
+The app talks to the live backend at https://brandboard.onrender.com
+(`VITE_API_URL`). Mock mode is opt-in: set `VITE_USE_MOCK=true` in `.env.local`
+to use the in-browser fake backend ("load demo projects" appears on the landing
+page, and a prompt containing "fail" shows the error state).
+
+`.env.production` is committed (no secrets) so deployed builds use the real API.
+
+The backend must allow CORS for `http://localhost:5173` and the deployed
+frontend origin (for Vercel previews, an `allow_origin_regex` such as
+`https://.*\.vercel\.app`).
 
 The free Render service sleeps when idle; the first request can take up to a
 minute. The app pings `/health` on load to wake it.
 
-To work offline with the in-browser fake backend, set `VITE_USE_MOCK=true` in
-`.env.local` and restart. "load demo projects" then appears on the landing page,
-and a prompt containing the word "fail" shows the error state.
+## Deploy to Vercel
 
-To call the backend directly (no proxy), set `VITE_API_URL=https://brandboard.onrender.com`
-and add `CORSMiddleware` to `backend/app/main.py`.
+Import the repo, set **Root Directory** to `frontend`, framework **Vite**
+(build `npm run build`, output `dist`). `vercel.json` handles SPA routing.
 
 ## Themes (light / dark)
 
