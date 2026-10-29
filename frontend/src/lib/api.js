@@ -5,12 +5,10 @@ import * as mock from './mockApi.js'
 import { SIZE_PRESETS } from './constants.js'
 import { getGenerationIds } from './storage.js'
 
-// "/api" goes through the Vite dev proxy / Vercel / Netlify rewrite to the Render backend,
-// so the browser never makes a cross-origin call (the backend has no CORS middleware yet).
-// To call the backend directly instead, set VITE_API_URL=https://brandboard.onrender.com
-// and add CORSMiddleware to backend/app/main.py.
-const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
+// The backend must allow this app's origin via CORS (see README).
+const API_URL = (import.meta.env.VITE_API_URL || 'https://brandboard.onrender.com').replace(/\/$/, '')
+// Mock mode is opt-in, so a deployment can never ship with fake data by accident.
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
 export class ApiError extends Error {
   constructor(message, status, body) {
